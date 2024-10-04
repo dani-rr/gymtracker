@@ -8,6 +8,7 @@ class TrainingForm:
         self.training_window = None
         self.buttons = []
         self.index = 0
+        self.selected_training = None
 
     def select_training(self, option):
         self.selected_training = option

@@ -24,20 +24,21 @@ def get_trainings(user):
 def get_last_training(user, training):
    cursor.execute('''SELECT * FROM "TrainingLog" WHERE "Name" = %s AND "Training" = %s AND "Date" = (SELECT MAX("Date") FROM "TrainingLog" WHERE "Name" = %s AND "Training" = %s); ''', (user, training, user, training))
    training = cursor.fetchall()
-   return training
+   training_columns = get_columns_names()
+   df_training = DataFrame(training)
+   df_training.columns = training_columns
+   return df_training
 
 def get_columns_names():
-   cursor.execute('''SELECT column_name FROM information_schema.columns WHERE table_name = 'TrainingLog' ''')
+   cursor.execute('''SELECT column_name FROM information_schema.columns WHERE table_name = 'TrainingLog' ORDER BY ordinal_position''')
    columns = [names[0] for names in cursor.fetchall()]
    return columns
 
 # db_connect()
-# columns = get_columns_names()
-# test = get_last_training('User 1', 'Legs')
-# df = DataFrame(test)
-# df.columns = columns
+# df = get_last_training('User 1', 'Legs')
 
-# #Commit your changes in the database
+
+# # #Commit your changes in the database
 # conn.commit()
 
 # #Closing the connection

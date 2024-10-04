@@ -13,12 +13,6 @@ class UserForm:
     def select_user(self, option):
         self.selected_user = option
         self.selection_window.destroy()
-        # self.fetch_trainings()
-
-    # def fetch_trainings(self):
-    #     if self.selected_user:
-    #         trainings = get_trainings(self.selected_user)
-    #         print(f"Trainings for {self.selected_user}: {trainings}")
 
     def highlight_button(self, button):
         for btn in self.buttons:

@@ -3,9 +3,13 @@ from tkinter import font
 import time
 import threading
 from evdev import InputDevice, categorize, ecodes
+from lib.libhelper.db import *
 
 class TimerForm:
-    def __init__(self):
+    def __init__(self, user, training):
+
+        self.user = user
+        self.training = training
         # Initialize window, define geometry, and hide title bar
         self.window = tk.Tk()
         self.window.geometry("960x320")
@@ -89,10 +93,17 @@ class TimerForm:
         right_frame.pack_propagate(False)
         right_frame.pack(side="right", fill="y")
 
+        training = get_last_training(self.user, self.training)
+        exercise = training.loc[training['ExerciseNumber'] == 1, 'Exercise'].values[0]
+        weight = training.loc[training['ExerciseNumber'] == 1, 'Weight'].values[0]
+        serie = training.loc[training['ExerciseNumber'] == 1, 'Set'].values[0]
+        rep = training.loc[training['ExerciseNumber'] == 1, 'Reps'].values[0]
+
+
         # Exercise label
         self.exercise_label = tk.Label(
             right_frame,
-            text="Ejercicio\nde prueba",
+            text=exercise,
             font=self.small_font,
             bg="black",
             fg="white",
@@ -105,14 +116,18 @@ class TimerForm:
         )
         self.exercise_label.pack(expand=True, fill="both", side="top")
 
+
+        right_middle_frame = tk.Frame(right_frame, bg="black")
+        right_middle_frame.pack(expand=True, fill="both", side="top")      
+
         # Series label
-        self.serie_label = tk.Label(
-            right_frame,
-            text=f"{'S:' : <1}{'22' : >5}",
+        self.weight_label = tk.Label(
+            right_middle_frame,
+            text=f"W: {weight}",
             font=self.small_font,
             bg="black",
             fg="white",
-            width=10,
+            # width=10,
             height=1,
             anchor="center",
             bd=2,
@@ -120,24 +135,56 @@ class TimerForm:
             highlightcolor="white",
             highlightthickness=2
         )
-        self.serie_label.pack(expand=True, fill="both", side="top")
+        self.weight_label.pack(expand=True, fill="both", side="left")
+        
+        self.serie_label = tk.Label(
+            right_middle_frame,
+            text=f"S: {serie}",
+            font=self.small_font,
+            bg="black",
+            fg="white",
+            # width=10,
+            height=1,
+            anchor="center",
+            bd=2,
+            highlightbackground="white",
+            highlightcolor="white",
+            highlightthickness=2
+        )
+        self.serie_label.pack(expand=True, fill="both", side="right")
+
+        border_frame = tk.Frame(right_frame, bg="white", bd=2)
+        border_frame.pack(expand=True, fill="both")  # 
+        inner_frame = tk.Frame(border_frame, bg="black")
+        inner_frame.pack(expand=True, fill="both") 
 
         # Weight label
-        self.weight_label = tk.Label(
-            right_frame,
-            text=f"{'W:' : <1}{'22' : >5}",
+        self.last_rep_label = tk.Label(
+            inner_frame,
+            text=f"Rep:{rep} / ",
             font=self.small_font,
             bg="black",
             fg="white",
-            width=10,
+            width=11,
             height=1,
-            anchor="center",
-            bd=2,
-            highlightbackground="white",
-            highlightcolor="white",
-            highlightthickness=2
+            anchor="e",
         )
-        self.weight_label.pack(expand=True, fill="both", side="bottom")  # Pack this label at the bottom
+        self.last_rep_label.pack(expand=True, fill="both", side="left")  
+
+        self.actual_rep_label = tk.Label(
+            inner_frame,
+            text=f"0",
+            font=self.small_font,
+            bg="black",
+            fg="white",
+            width=2,
+            height=1,
+            anchor="w",
+        )
+        self.actual_rep_label.pack(expand=True, fill="both", side="right")  
+
+        self.is_visible = True
+        self.blink_label()
 
     def set_idle_timer(self, t):
         # Reset the idle timer
@@ -175,6 +222,16 @@ class TimerForm:
         timeformat = "{:02d}:{:02d}:{:02d}".format(hours, mins, secs)
         self.training_time_label.configure(text=f"{timeformat}")
         self.window.after(1000, lambda: self.training_time(self.training_time_seconds + 1))
+
+
+    def blink_label(self):
+        if self.is_visible:
+            self.actual_rep_label.config(fg="white") 
+        else:
+            self.actual_rep_label.config(fg=self.actual_rep_label["bg"])  
+        self.is_visible = not self.is_visible
+
+        self.window.after(500, self.blink_label)
 
     def monitor_controller(self):
         try:
