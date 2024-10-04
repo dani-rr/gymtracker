@@ -38,7 +38,7 @@ class TrainingForm:
 
     def selection_training_layout(self):
         # Create the selection window layout
-        trainings = get_trainings(self.user)
+        trainings, trainigs_strings = get_trainings(self.user)
 
         self.training_window = tk.Tk()
         self.training_window.geometry("960x320")
@@ -55,11 +55,11 @@ class TrainingForm:
             fg='white',
             bd=0,
             highlightthickness=0,
-            text=trainings[0], 
+            text=trainigs_strings[0], 
             font=menu_font, 
             command=lambda: self.select_training(trainings[0])
         )
-        training_1_button.place(x=150, y=150, width=150, height=80)
+        training_1_button.place(x=100, y=150, width=250, height=80)
 
         training_2_button = tk.Button(
             self.training_window, 
@@ -71,7 +71,7 @@ class TrainingForm:
             font=menu_font, 
             command=lambda: self.select_training(trainings[2])
         )
-        training_2_button.place(x=405, y=150, width=150, height=80)
+        training_2_button.place(x=355, y=150, width=250, height=80)
 
         training_3_button = tk.Button(
             self.training_window, 
@@ -83,7 +83,7 @@ class TrainingForm:
             font=menu_font, 
             command=lambda: self.select_training(trainings[2])
         )
-        training_3_button.place(x=660, y=150, width=150, height=80)
+        training_3_button.place(x=610, y=150, width=250, height=80)
 
         self.buttons = [training_1_button, training_2_button, training_3_button]
 
