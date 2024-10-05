@@ -4,6 +4,7 @@ import time
 import threading
 from evdev import InputDevice, categorize, ecodes
 from lib.libhelper.db import *
+from lib.libclass.controller import *
 
 class TimerForm:
     def __init__(self, user, training):
@@ -20,6 +21,7 @@ class TimerForm:
         self.idle_timer_seconds = 0
         self.idle_timer_id = None
         self.training_time_seconds = 0
+        self.exercise_number = 1
 
         self.setup_ui()
 
@@ -27,28 +29,31 @@ class TimerForm:
         self.update_current_time()
         self.training_time(0)
 
-        self.controller_thread = threading.Thread(target=self.monitor_controller, daemon=True)
-        self.controller_thread.start()
+        # Initialize Controller
+        self.controller = Controller()
+        self.controller.register_listener(self.handle_controller_input)
 
         self.window.mainloop()
 
+
+
     def setup_ui(self):
         # Left frame
-        left_frame = tk.Frame(self.window, bg="black", width=650)
-        left_frame.pack_propagate(False)
-        left_frame.pack(fill="y", side="left")
+        self.left_frame = tk.Frame(self.window, bg="black", width=650)
+        self.left_frame.pack_propagate(False)
+        self.left_frame.pack(fill="y", side="left")
 
-        left_frame_top = tk.Frame(left_frame, bg="black", height=240)
-        left_frame_top.pack_propagate(False)
-        left_frame_top.pack(fill="x", side="top")
+        self.left_frame_top = tk.Frame(self.left_frame, bg="black", height=240)
+        self.left_frame_top.pack_propagate(False)
+        self.left_frame_top.pack(fill="x", side="top")
 
-        left_frame_bottom = tk.Frame(left_frame, bg="black", height=80)
-        left_frame_bottom.pack_propagate(False)
-        left_frame_bottom.pack(fill="x", side="top")
+        self.left_frame_bottom = tk.Frame(self.left_frame, bg="black", height=80)
+        self.left_frame_bottom.pack_propagate(False)
+        self.left_frame_bottom.pack(fill="x", side="top")
 
         # Timer label
         self.timer_label = tk.Label(
-            left_frame_top,
+            self.left_frame_top,
             font=self.principal_font,
             bg="black",
             fg="red",
@@ -62,7 +67,7 @@ class TimerForm:
 
         # Training time label
         self.training_time_label = tk.Label(
-            left_frame_bottom,
+            self.left_frame_bottom,
             font=self.small_font,
             bg="black",
             fg="white",
@@ -76,7 +81,7 @@ class TimerForm:
 
         # Current time label
         self.current_time_label = tk.Label(
-            left_frame_bottom,
+            self.left_frame_bottom,
             font=self.small_font,
             bg="black",
             fg="white",
@@ -89,21 +94,30 @@ class TimerForm:
         self.current_time_label.pack(expand=True, fill="both", side="right")
 
         # Right frame
-        right_frame = tk.Frame(self.window, width=310)
-        right_frame.pack_propagate(False)
-        right_frame.pack(side="right", fill="y")
-
-        training = get_last_training(self.user, self.training)
-        exercise = training.loc[training['ExerciseNumber'] == 1, 'Exercise'].values[0]
-        weight = training.loc[training['ExerciseNumber'] == 1, 'Weight'].values[0]
-        serie = training.loc[training['ExerciseNumber'] == 1, 'Set'].values[0]
-        rep = training.loc[training['ExerciseNumber'] == 1, 'Reps'].values[0]
+        self.right_frame = tk.Frame(self.window, width=310)
+        self.right_frame.pack_propagate(False)
+        self.right_frame.pack(side="right", fill="y")
 
 
+        self.training_df = get_last_training(self.user, self.training)
+        self.new_training_df = self.training_df.copy()
+        self.new_training_df = self.new_training_df.assign(Reps=0)
+        print(self.new_training_df)
+        self.exercise = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Exercise'].values[0]
+        self.set = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Set'].values[0]
+        self.rep = self.training_df.loc[
+            (self.training_df['ExerciseNumber'] == self.exercise_number) &
+            (self.training_df['Set'] == self.set),
+            'Reps'].values[0]
+        self.weight = self.training_df.loc[
+            (self.training_df['ExerciseNumber'] == self.exercise_number) &
+            (self.training_df['Set'] == self.set),
+            'Weight'].values[0]
+        
         # Exercise label
         self.exercise_label = tk.Label(
-            right_frame,
-            text=exercise,
+            self.right_frame,
+            text=self.exercise,
             font=self.small_font,
             bg="black",
             fg="white",
@@ -112,18 +126,19 @@ class TimerForm:
             bd=2,
             highlightbackground="white",
             highlightcolor="white",
-            highlightthickness=2
+            highlightthickness=2,
+            wraplength=280
         )
         self.exercise_label.pack(expand=True, fill="both", side="top")
 
 
-        right_middle_frame = tk.Frame(right_frame, bg="black")
-        right_middle_frame.pack(expand=True, fill="both", side="top")      
+        self.right_middle_frame = tk.Frame(self.right_frame, bg="black")
+        self.right_middle_frame.pack(expand=True, fill="both", side="top")      
 
         # Series label
         self.weight_label = tk.Label(
-            right_middle_frame,
-            text=f"W: {weight}",
+            self.right_middle_frame,
+            text=f"W: {self.weight}",
             font=self.small_font,
             bg="black",
             fg="white",
@@ -137,9 +152,9 @@ class TimerForm:
         )
         self.weight_label.pack(expand=True, fill="both", side="left")
         
-        self.serie_label = tk.Label(
-            right_middle_frame,
-            text=f"S: {serie}",
+        self.set_label = tk.Label(
+            self.right_middle_frame,
+            text=f"S: {self.set}",
             font=self.small_font,
             bg="black",
             fg="white",
@@ -151,17 +166,17 @@ class TimerForm:
             highlightcolor="white",
             highlightthickness=2
         )
-        self.serie_label.pack(expand=True, fill="both", side="right")
+        self.set_label.pack(expand=True, fill="both", side="right")
 
-        border_frame = tk.Frame(right_frame, bg="white", bd=2)
-        border_frame.pack(expand=True, fill="both")  # 
-        inner_frame = tk.Frame(border_frame, bg="black")
-        inner_frame.pack(expand=True, fill="both") 
+        self.border_frame = tk.Frame(self.right_frame, bg="white", bd=2)
+        self.border_frame.pack(expand=True, fill="both")  # 
+        self.inner_frame = tk.Frame(self.border_frame, bg="black")
+        self.inner_frame.pack(expand=True, fill="both") 
 
         # Weight label
         self.last_rep_label = tk.Label(
-            inner_frame,
-            text=f"Rep:{rep} / ",
+            self.inner_frame,
+            text=f"Rep:{self.rep} / ",
             font=self.small_font,
             bg="black",
             fg="white",
@@ -172,7 +187,7 @@ class TimerForm:
         self.last_rep_label.pack(expand=True, fill="both", side="left")  
 
         self.actual_rep_label = tk.Label(
-            inner_frame,
+            self.inner_frame,
             text=f"0",
             font=self.small_font,
             bg="black",
@@ -184,7 +199,8 @@ class TimerForm:
         self.actual_rep_label.pack(expand=True, fill="both", side="right")  
 
         self.is_visible = True
-        self.blink_label()
+        self.insert_rep = False
+        self.blink_label("white")
 
     def set_idle_timer(self, t):
         # Reset the idle timer
@@ -224,23 +240,81 @@ class TimerForm:
         self.window.after(1000, lambda: self.training_time(self.training_time_seconds + 1))
 
 
-    def blink_label(self):
+    def blink_label(self, color):
         if self.is_visible:
-            self.actual_rep_label.config(fg="white") 
+            self.actual_rep_label.config(fg=color) 
         else:
             self.actual_rep_label.config(fg=self.actual_rep_label["bg"])  
         self.is_visible = not self.is_visible
+        
+        self.window.after(500, self.blink_label("white"))
 
-        self.window.after(500, self.blink_label)
+    def handle_controller_input(self, keycode):
+        match keycode:
+            case "BTN_B":
+                self.set_idle_timer(0)    
+            case "DOWN" | "UP":
+                self.update_exercise(keycode)
+            case "RIGHT" | "LEFT":
+                self.update_set(keycode)
+            case "BTN_A":
+                self.insert_rep = True
+                self.set_rep()
+        
 
-    def monitor_controller(self):
-        try:
-            gamepad = InputDevice("/dev/input/event4")  # Update event number if needed
-            for event in gamepad.read_loop():
-                if event.type == ecodes.EV_KEY:  # Button events
-                    key_event = categorize(event)
-                    if key_event.keystate == 1 and key_event.keycode[0] == "BTN_A":  # Button A on Xbox controller
-                        print("Button A pressed, resetting idle timer!")
-                        self.set_idle_timer(0)  # Reset idle timer
-        except:
-            return None
+    def set_rep(self):
+        self.blink_label("yellow")
+        self.insert_rep = False
+
+
+
+    def update_set(self, keycode):
+        self.max_set = self.training_df[self.training_df['Training'] == self.training]["Set"].max()
+        if keycode == "RIGHT" and self.set < self.max_set:
+            self.set = self.set + 1
+            self.update_set_layout()
+        elif keycode == "LEFT" and self.set > 1:
+            self.set = self.set - 1
+            self.update_set_layout()
+
+    def update_exercise(self, keycode):
+        self.max_exercise = self.training_df[self.training_df['Training'] == self.training]["ExerciseNumber"].max()
+        if keycode == "UP" and self.exercise_number < self.max_exercise: 
+            self.exercise_number += 1
+            self.update_exercise_layout()
+        elif keycode == "DOWN" and self.exercise_number > 1:
+            self.exercise_number -= 1
+            self.update_exercise_layout()
+
+    def update_exercise_layout(self):
+        self.exercise = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Exercise'].values[0]
+        self.set = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Set'].values[0]
+        self.rep = self.training_df.loc[
+            (self.training_df['ExerciseNumber'] == self.exercise_number) &
+            (self.training_df['Set'] == self.set),
+            'Reps'].values[0]
+        self.weight = self.training_df.loc[
+            (self.training_df['ExerciseNumber'] == self.exercise_number) &
+            (self.training_df['Set'] == self.set),
+            'Weight'].values[0]
+
+        self.exercise_label.config(text=self.exercise)
+        self.weight_label.config(text=f"W: {self.weight}")
+        self.set_label.config(text=f"S: {self.set}")
+        self.last_rep_label.config(text=f"Rep:{self.rep} / ")
+
+    def update_set_layout(self):
+        self.rep = self.training_df.loc[
+            (self.training_df['ExerciseNumber'] == self.exercise_number) &
+            (self.training_df['Set'] == self.set),
+            'Reps'].values[0]
+        self.weight = self.training_df.loc[
+            (self.training_df['ExerciseNumber'] == self.exercise_number) &
+            (self.training_df['Set'] == self.set),
+            'Weight'].values[0]
+
+        self.set_label.config(text=f"S: {self.set}")
+        self.weight_label.config(text=f"W: {self.weight}")
+        self.last_rep_label.config(text=f"Rep:{self.rep} / ")
+
+        
