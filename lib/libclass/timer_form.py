@@ -1,8 +1,7 @@
 import tkinter as tk
 from tkinter import font
 import time
-import threading
-from evdev import InputDevice, categorize, ecodes
+from datetime import datetime
 from lib.libhelper.db import *
 from lib.libclass.controller import *
 
@@ -98,22 +97,8 @@ class TimerForm:
         self.right_frame.pack_propagate(False)
         self.right_frame.pack(side="right", fill="y")
 
+        self.set_df()
 
-        self.training_df = get_last_training(self.user, self.training)
-        self.new_training_df = self.training_df.copy()
-        self.new_training_df = self.new_training_df.assign(Reps=0)
-        print(self.new_training_df)
-        self.exercise = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Exercise'].values[0]
-        self.set = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Set'].values[0]
-        self.rep = self.training_df.loc[
-            (self.training_df['ExerciseNumber'] == self.exercise_number) &
-            (self.training_df['Set'] == self.set),
-            'Reps'].values[0]
-        self.weight = self.training_df.loc[
-            (self.training_df['ExerciseNumber'] == self.exercise_number) &
-            (self.training_df['Set'] == self.set),
-            'Weight'].values[0]
-        
         # Exercise label
         self.exercise_label = tk.Label(
             self.right_frame,
@@ -199,8 +184,43 @@ class TimerForm:
         self.actual_rep_label.pack(expand=True, fill="both", side="right")  
 
         self.is_visible = True
-        self.insert_rep = False
         self.blink_label("white")
+
+    def set_df(self):
+        self.weight_steps = [4, 7, 9, 11, 14, 16, 18, 20, 23, 25, 27, 30, 32, 34, 36, 39, 41]
+        self.training_df = get_last_training(self.user, self.training)
+        self.new_training_df = self.training_df.copy()
+        self.new_training_df = self.new_training_df.assign(Reps=0)
+        self.new_training_df = self.new_training_df.assign(Date=datetime.today().strftime('%Y-%m-%d'))
+        self.list_exercise_numbers = sorted(self.new_training_df['ExerciseNumber'].unique())
+        self.exercise = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Exercise'].values[0]
+        self.set = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Set'].values[0]
+
+        self.weight = self.training_df.loc[
+            (self.training_df['ExerciseNumber'] == self.exercise_number) &
+            (self.training_df['Set'] == self.set),
+            'Weight'].values[0]
+        for ex in self.list_exercise_numbers:
+            goal_reps = self.training_df.loc[self.training_df['ExerciseNumber'] == ex, 'GoalReps'].sum()
+            last_reps = self.training_df.loc[self.training_df['ExerciseNumber'] == ex, 'Reps'].sum()
+            if goal_reps <= last_reps:
+                exercise_set_weight = self.training_df.loc[
+                                        (self.training_df['ExerciseNumber'] == ex) &
+                                        (self.training_df['Set'] == self.set),
+                                        'Weight'].values[0]
+                current_weigt_index = self.weight_steps.index(exercise_set_weight)
+                next_weight = self.weight_steps[current_weigt_index + 1]
+                self.training_df.loc[self.training_df['ExerciseNumber'] == ex, 'Reps'] = "*"
+                self.new_training_df.loc[self.new_training_df['ExerciseNumber'] == ex, 'Weight'] = next_weight
+
+        self.rep = self.training_df.loc[
+            (self.training_df['ExerciseNumber'] == self.exercise_number) &
+            (self.training_df['Set'] == self.set),
+            'Reps'].values[0]    
+        print(self.training_df)
+        print(self.new_training_df)
+        print('here')
+
 
     def set_idle_timer(self, t):
         # Reset the idle timer
@@ -242,12 +262,13 @@ class TimerForm:
 
     def blink_label(self, color):
         if self.is_visible:
-            self.actual_rep_label.config(fg=color) 
+            self.actual_rep_label.config(fg=color)
         else:
             self.actual_rep_label.config(fg=self.actual_rep_label["bg"])  
         self.is_visible = not self.is_visible
-        
-        self.window.after(500, self.blink_label("white"))
+
+        # Store the after ID for future cancellation
+        self.blink_id = self.window.after(1000, lambda: self.blink_label(color))
 
     def handle_controller_input(self, keycode):
         match keycode:
@@ -261,12 +282,12 @@ class TimerForm:
                 self.insert_rep = True
                 self.set_rep()
         
-
     def set_rep(self):
+        if hasattr(self, 'blink_id'):
+            self.window.after_cancel(self.blink_id)  # Cancel the blinking
+
+        # Now start the blink in yellow
         self.blink_label("yellow")
-        self.insert_rep = False
-
-
 
     def update_set(self, keycode):
         self.max_set = self.training_df[self.training_df['Training'] == self.training]["Set"].max()
