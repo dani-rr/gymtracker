@@ -195,7 +195,6 @@ class TimerForm:
         self.list_exercise_numbers = sorted(self.new_training_df['ExerciseNumber'].unique())
         self.exercise = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Exercise'].values[0]
         self.set = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Set'].values[0]
-
         self.weight = self.training_df.loc[
             (self.training_df['ExerciseNumber'] == self.exercise_number) &
             (self.training_df['Set'] == self.set),
@@ -217,9 +216,7 @@ class TimerForm:
             (self.training_df['ExerciseNumber'] == self.exercise_number) &
             (self.training_df['Set'] == self.set),
             'Reps'].values[0]    
-        print(self.training_df)
-        print(self.new_training_df)
-        print('here')
+
 
 
     def set_idle_timer(self, t):
