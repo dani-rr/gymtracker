@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import font
 from lib.libhelper.db import *
+from lib.libclass.controller import *
+from lib.libclass.timer_form import *
 
 class TrainingForm:
     def __init__(self, user):
@@ -9,10 +11,27 @@ class TrainingForm:
         self.buttons = []
         self.index = 0
         self.selected_training = None
+                
+        # Initialize Controller
+        self.controller = Controller()
+        self.controller.register_listener(self.handle_controller_input)
+
+
+    def handle_controller_input(self, keycode):
+        match keycode:
+            case "RIGHT" | "LEFT":
+                self.switch_button(keycode)
+            case "BTN_A":
+                self.on_enter()
+
 
     def select_training(self, option):
         self.selected_training = option
         self.training_window.destroy() 
+        timer_app = TimerForm(self.user, self.selected_training)
+        timer_app.set_idle_timer(0)
+        timer_app.update_current_time()
+        timer_app.training_time(0)
 
     def highlight_button(self, button):
         for btn in self.buttons:
@@ -21,16 +40,16 @@ class TrainingForm:
 
     def switch_button(self, event):
         # Switch focus between buttons
-        if event.keysym == 'Left':
+        if event == "LEFT":
             if self.index > 0:
                 self.index -= 1
-        elif event.keysym == 'Right':
+        elif event == "RIGHT":
             if self.index < len(self.buttons) - 1:
                 self.index += 1
         self.buttons[self.index].focus_set()
         self.highlight_button(self.buttons[self.index])
 
-    def on_enter(self, event):
+    def on_enter(self):
         # Invoke the currently focused button
         focused_widget = self.training_window.focus_get()
         if focused_widget in self.buttons:
@@ -90,7 +109,4 @@ class TrainingForm:
     def init_selection_training(self):
         # Start the window's main loop
         self.training_window.after(100, lambda: (self.buttons[0].focus_set(), self.highlight_button(self.buttons[0])))
-        self.training_window.bind('<Left>', self.switch_button)
-        self.training_window.bind('<Right>', self.switch_button)
-        self.training_window.bind('<Return>', self.on_enter)
         self.training_window.mainloop()

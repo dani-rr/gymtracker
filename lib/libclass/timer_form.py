@@ -21,6 +21,7 @@ class TimerForm:
         self.idle_timer_id = None
         self.training_time_seconds = 0
         self.exercise_number = 1
+        self.insert_rep = False
 
         self.setup_ui()
 
@@ -270,9 +271,15 @@ class TimerForm:
     def handle_controller_input(self, keycode):
         match keycode:
             case "BTN_B":
-                self.set_idle_timer(0)    
+                if self.insert_rep == False:
+                    self.set_idle_timer(0)    
+                elif self.insert_rep == True:  
+                    self.set_rep_cancel()
             case "DOWN" | "UP":
-                self.update_exercise(keycode)
+                if self.insert_rep == False:
+                    self.update_exercise(keycode)
+                elif self.insert_rep == True:
+                    self.update_rep(keycode)
             case "RIGHT" | "LEFT":
                 self.update_set(keycode)
             case "BTN_A":
@@ -285,6 +292,13 @@ class TimerForm:
 
         # Now start the blink in yellow
         self.blink_label("yellow")
+
+    def set_rep_cancel(self):
+        if hasattr(self, 'blink_id'):
+            self.window.after_cancel(self.blink_id)  # Cancel the blinking
+
+        # Now start the blink in yellow
+        self.blink_label("white")
 
     def update_set(self, keycode):
         self.max_set = self.training_df[self.training_df['Training'] == self.training]["Set"].max()
@@ -303,6 +317,12 @@ class TimerForm:
         elif keycode == "DOWN" and self.exercise_number > 1:
             self.exercise_number -= 1
             self.update_exercise_layout()
+
+    def update_rep(self, keycode):
+        if keycode == "UP": 
+            self.rep += 1
+        elif keycode == "DOWN":
+            self.exercise_number -= 1
 
     def update_exercise_layout(self):
         self.exercise = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Exercise'].values[0]

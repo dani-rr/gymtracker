@@ -6,7 +6,7 @@ class Controller:
         self.event_device_path = event_device_path
         self.listeners = []
         self.is_running = True
-        self.controller_thread = threading.Thread(target=self._monitor_controller, daemon=True)
+        self.controller_thread = threading.Thread(target=self._monitor_controller)
         self.controller_thread.start()
 
     def _monitor_controller(self):
