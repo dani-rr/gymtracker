@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 from lib.libhelper.db import *
 from lib.libclass.controller import *
+import numpy as np
 
 class TimerForm:
     def __init__(self, user, training):
@@ -22,6 +23,7 @@ class TimerForm:
         self.training_time_seconds = 0
         self.exercise_number = 1
         self.insert_rep = False
+        self.new_rep = 0
 
         self.setup_ui()
 
@@ -191,7 +193,7 @@ class TimerForm:
         self.weight_steps = [4, 7, 9, 11, 14, 16, 18, 20, 23, 25, 27, 30, 32, 34, 36, 39, 41]
         self.training_df = get_last_training(self.user, self.training)
         self.new_training_df = self.training_df.copy()
-        self.new_training_df = self.new_training_df.assign(Reps=0)
+        self.new_training_df = self.new_training_df.assign(Reps=np.nan)
         self.new_training_df = self.new_training_df.assign(Date=datetime.today().strftime('%Y-%m-%d'))
         self.list_exercise_numbers = sorted(self.new_training_df['ExerciseNumber'].unique())
         self.exercise = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Exercise'].values[0]
@@ -210,14 +212,15 @@ class TimerForm:
                                         'Weight'].values[0]
                 current_weigt_index = self.weight_steps.index(exercise_set_weight)
                 next_weight = self.weight_steps[current_weigt_index + 1]
-                self.training_df.loc[self.training_df['ExerciseNumber'] == ex, 'Reps'] = "*"
+                self.training_df.loc[self.training_df['ExerciseNumber'] == ex, 'Reps'] = np.nan
                 self.new_training_df.loc[self.new_training_df['ExerciseNumber'] == ex, 'Weight'] = next_weight
 
         self.rep = self.training_df.loc[
             (self.training_df['ExerciseNumber'] == self.exercise_number) &
             (self.training_df['Set'] == self.set),
             'Reps'].values[0]    
-
+        print(self.training_df)
+        print(self.new_training_df)
 
 
     def set_idle_timer(self, t):
@@ -281,10 +284,23 @@ class TimerForm:
                 elif self.insert_rep == True:
                     self.update_rep(keycode)
             case "RIGHT" | "LEFT":
-                self.update_set(keycode)
+                if self.insert_rep == True:
+                    pass
+                else:
+                    self.update_set(keycode)
             case "BTN_A":
-                self.insert_rep = True
-                self.set_rep()
+                if self.insert_rep == False:
+                    self.insert_rep = True
+                    self.set_rep()
+                if self.insert_rep == True:
+                    self.set_rep()
+
+    def set_rep(self):
+        self.new_training_df['Reps'] == self.rep
+        self.window.after_cancel(self.blink_id)
+        self.blink_label("white")
+        self.insert_rep = False
+
         
     def set_rep(self):
         if hasattr(self, 'blink_id'):
@@ -294,6 +310,7 @@ class TimerForm:
         self.blink_label("yellow")
 
     def set_rep_cancel(self):
+        self.insert_rep = False
         if hasattr(self, 'blink_id'):
             self.window.after_cancel(self.blink_id)  # Cancel the blinking
 
@@ -320,9 +337,10 @@ class TimerForm:
 
     def update_rep(self, keycode):
         if keycode == "UP": 
-            self.rep += 1
+            self.new_rep += 1
         elif keycode == "DOWN":
-            self.exercise_number -= 1
+            self.new_rep -= 1
+        self.actual_rep_label.config(text=self.new_rep)
 
     def update_exercise_layout(self):
         self.exercise = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Exercise'].values[0]
@@ -354,5 +372,4 @@ class TimerForm:
         self.set_label.config(text=f"S: {self.set}")
         self.weight_label.config(text=f"W: {self.weight}")
         self.last_rep_label.config(text=f"Rep:{self.rep} / ")
-
         

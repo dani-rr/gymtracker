@@ -1,22 +1,22 @@
 import tkinter as tk
 from tkinter import font
 from lib.libhelper.db import *
-from lib.libclass.controller import *
+from lib.libclass.controller import Controller
 from lib.libclass.training_form import *
+
+
 
 class UserForm:
     def __init__(self):
         self.selection_window = None
-        self.buttons = []
+        self.buttons = []   
         self.index = 0
         self.selected_user = None 
+        self.selection_user_layout()
+        self.cc = Controller()
+        self.cc.register_listener(self.handle_controller_input_user)
 
-
-        # Initialize Controller
-        self.controller = Controller()
-        self.controller.register_listener(self.handle_controller_input)
-
-    def handle_controller_input(self, keycode):
+    def handle_controller_input_user(self, keycode):
         match keycode:
             case "RIGHT" | "LEFT":
                 self.switch_button(keycode)
@@ -24,11 +24,13 @@ class UserForm:
                 self.on_enter()
 
     def select_user(self, option):
+        from main import call_trainingForm
+        self.cc.stop()  # Stop the old controller thread
         self.selected_user = option
         self.selection_window.destroy()
-        training_app = TrainingForm(self.selected_user) 
-        training_app.selection_training_layout()
-        training_app.init_selection_training()
+
+        call_trainingForm(self.selected_user)
+
 
     def highlight_button(self, button):
         for btn in self.buttons:
@@ -54,6 +56,7 @@ class UserForm:
 
     def selection_user_layout(self):
         # Create the selection window layout
+
         names = get_names()
 
         self.selection_window = tk.Tk()

@@ -1,28 +1,35 @@
 import tkinter as tk
 from tkinter import font
 from lib.libhelper.db import *
-from lib.libclass.controller import *
 from lib.libclass.timer_form import *
+from lib.libclass.controller import Controller
+
 
 class TrainingForm:
     def __init__(self, user):
+        import main
         self.user = user  
         self.training_window = None
         self.buttons = []
         self.index = 0
         self.selected_training = None
-                
-        # Initialize Controller
-        self.controller = Controller()
-        self.controller.register_listener(self.handle_controller_input)
+        cc = Controller()
+        cc.register_listener(self.handle_controller_input_training) 
+        self.selection_training_layout()  
 
-
-    def handle_controller_input(self, keycode):
+    def handle_controller_input_training(self, keycode):
         match keycode:
             case "RIGHT" | "LEFT":
                 self.switch_button(keycode)
             case "BTN_A":
                 self.on_enter()
+            case "BTN_B":
+                self.go_back()
+        
+    def go_back(self):
+        from main import call_userForm
+        self.training_window.destroy() 
+        call_userForm()
 
 
     def select_training(self, option):
@@ -57,7 +64,7 @@ class TrainingForm:
 
     def selection_training_layout(self):
         # Create the selection window layout
-        trainings, trainigs_strings = get_trainings(self.user)
+        trainings, trainings_strings = get_trainings(self.user)
 
         self.training_window = tk.Tk()
         self.training_window.geometry("960x320")
@@ -74,7 +81,7 @@ class TrainingForm:
             fg='white',
             bd=0,
             highlightthickness=0,
-            text=trainigs_strings[0], 
+            text=trainings_strings[0], 
             font=menu_font, 
             command=lambda: self.select_training(trainings[0])
         )

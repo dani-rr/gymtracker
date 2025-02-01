@@ -12,8 +12,9 @@ class Controller:
     def _monitor_controller(self):
         try:
             gamepad = InputDevice(self.event_device_path)
-            
             for event in gamepad.read_loop():
+                if not self.is_running:  # Check if we need to stop
+                    break  # Exit loop when stopping
                 # Handle button events (e.g., Button A, Button B)
                 if event.type == ecodes.EV_KEY:
                     key_event = categorize(event)
@@ -37,19 +38,14 @@ class Controller:
                         elif event.value == -1:
                             self._notify_listeners("UP")
         except Exception as e:
-            print(f"Error with controller: {e}")
             self.is_running = False
 
     def _notify_listeners(self, keycode):
-        # Notify all registered listeners with the keycode
         for callback in self.listeners:
             callback(keycode)
 
     def register_listener(self, callback):
-        """
-        Register a function that will be called when a button is pressed.
-        The callback should accept one argument: the keycode of the pressed button.
-        """
+        self.listeners.clear()  # Clear previous listeners
         self.listeners.append(callback)
 
     def stop(self):
