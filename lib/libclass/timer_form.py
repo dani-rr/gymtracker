@@ -40,6 +40,9 @@ class TimerForm:
 
 
     def setup_ui(self):
+        
+        self.set_df()
+
         # Left frame
         self.left_frame = tk.Frame(self.window, bg="black", width=650)
         self.left_frame.pack_propagate(False)
@@ -100,7 +103,7 @@ class TimerForm:
         self.right_frame.pack_propagate(False)
         self.right_frame.pack(side="right", fill="y")
 
-        self.set_df()
+
 
         # Exercise label
         self.exercise_label = tk.Label(
@@ -174,9 +177,9 @@ class TimerForm:
         )
         self.last_rep_label.pack(expand=True, fill="both", side="left")  
 
-        self.actual_rep_label = tk.Label(
+        self.new_rep_label = tk.Label(
             self.inner_frame,
-            text=f"0",
+            text=self.new_rep,
             font=self.small_font,
             bg="black",
             fg="white",
@@ -184,7 +187,7 @@ class TimerForm:
             height=1,
             anchor="w",
         )
-        self.actual_rep_label.pack(expand=True, fill="both", side="right")  
+        self.new_rep_label.pack(expand=True, fill="both", side="right")  
 
         self.is_visible = True
         self.blink_label("white")
@@ -192,12 +195,14 @@ class TimerForm:
     def set_df(self):
         self.weight_steps = [4, 7, 9, 11, 14, 16, 18, 20, 23, 25, 27, 30, 32, 34, 36, 39, 41]
         self.training_df = get_last_training(self.user, self.training)
+        self.training_df['Reps'] = self.training_df['Reps'].astype('Int64')
         self.new_training_df = self.training_df.copy()
-        self.new_training_df = self.new_training_df.assign(Reps=np.nan)
+        self.new_training_df = self.new_training_df.assign(Reps=0)
         self.new_training_df = self.new_training_df.assign(Date=datetime.today().strftime('%Y-%m-%d'))
         self.list_exercise_numbers = sorted(self.new_training_df['ExerciseNumber'].unique())
         self.exercise = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Exercise'].values[0]
         self.set = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Set'].values[0]
+
         self.weight = self.training_df.loc[
             (self.training_df['ExerciseNumber'] == self.exercise_number) &
             (self.training_df['Set'] == self.set),
@@ -212,15 +217,18 @@ class TimerForm:
                                         'Weight'].values[0]
                 current_weigt_index = self.weight_steps.index(exercise_set_weight)
                 next_weight = self.weight_steps[current_weigt_index + 1]
-                self.training_df.loc[self.training_df['ExerciseNumber'] == ex, 'Reps'] = np.nan
+                self.training_df.loc[self.training_df['ExerciseNumber'] == ex, 'Reps'] = 0
                 self.new_training_df.loc[self.new_training_df['ExerciseNumber'] == ex, 'Weight'] = next_weight
 
         self.rep = self.training_df.loc[
             (self.training_df['ExerciseNumber'] == self.exercise_number) &
             (self.training_df['Set'] == self.set),
             'Reps'].values[0]    
-        print(self.training_df)
-        print(self.new_training_df)
+        self.new_rep = self.new_training_df.loc[
+            (self.new_training_df['ExerciseNumber'] == self.exercise_number) &
+            (self.new_training_df['Set'] == self.set),
+            'Reps'].values[0]    
+
 
 
     def set_idle_timer(self, t):
@@ -262,10 +270,13 @@ class TimerForm:
 
 
     def blink_label(self, color):
+        if self.new_rep > 0:
+            self.new_rep_label.config(fg=color)
+            return None
         if self.is_visible:
-            self.actual_rep_label.config(fg=color)
+            self.new_rep_label.config(fg=color)
         else:
-            self.actual_rep_label.config(fg=self.actual_rep_label["bg"])  
+            self.new_rep_label.config(fg=self.new_rep_label["bg"])  
         self.is_visible = not self.is_visible
 
         # Store the after ID for future cancellation
@@ -292,11 +303,11 @@ class TimerForm:
                 if self.insert_rep == False:
                     self.insert_rep = True
                     self.set_rep()
-                if self.insert_rep == True:
-                    self.set_rep()
+                elif self.insert_rep == True:
+                    self.save_rep()
 
-    def set_rep(self):
-        self.new_training_df['Reps'] == self.rep
+    def save_rep(self):
+        self.new_training_df.loc[(self.new_training_df['ExerciseNumber'] == self.exercise_number) & (self.new_training_df['Set'] == self.set), 'Reps'] = self.new_rep
         self.window.after_cancel(self.blink_id)
         self.blink_label("white")
         self.insert_rep = False
@@ -305,15 +316,19 @@ class TimerForm:
     def set_rep(self):
         if hasattr(self, 'blink_id'):
             self.window.after_cancel(self.blink_id)  # Cancel the blinking
-
         # Now start the blink in yellow
+        self.last_new_rep = self.new_rep
         self.blink_label("yellow")
 
     def set_rep_cancel(self):
         self.insert_rep = False
+        self.new_rep = self.last_new_rep
+        if self.new_rep == 0:
+            self.new_rep_label.config(text="-")
+        else:
+            self.new_rep_label.config(text=self.new_rep)
         if hasattr(self, 'blink_id'):
             self.window.after_cancel(self.blink_id)  # Cancel the blinking
-
         # Now start the blink in yellow
         self.blink_label("white")
 
@@ -340,36 +355,58 @@ class TimerForm:
             self.new_rep += 1
         elif keycode == "DOWN":
             self.new_rep -= 1
-        self.actual_rep_label.config(text=self.new_rep)
+        self.new_rep_label.config(text=self.new_rep)
 
     def update_exercise_layout(self):
         self.exercise = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Exercise'].values[0]
+        self.weight = self.training_df.loc[
+            (self.training_df['ExerciseNumber'] == self.exercise_number) &
+            (self.training_df['Set'] == self.set),
+            'Weight'].values[0]
         self.set = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Set'].values[0]
         self.rep = self.training_df.loc[
             (self.training_df['ExerciseNumber'] == self.exercise_number) &
             (self.training_df['Set'] == self.set),
             'Reps'].values[0]
-        self.weight = self.training_df.loc[
-            (self.training_df['ExerciseNumber'] == self.exercise_number) &
-            (self.training_df['Set'] == self.set),
-            'Weight'].values[0]
+        self.new_rep = self.new_training_df.loc[
+            (self.new_training_df['ExerciseNumber'] == self.exercise_number) &
+            (self.new_training_df['Set'] == self.set),
+            'Reps'].values[0]   
 
         self.exercise_label.config(text=self.exercise)
         self.weight_label.config(text=f"W: {self.weight}")
         self.set_label.config(text=f"S: {self.set}")
-        self.last_rep_label.config(text=f"Rep:{self.rep} / ")
+        if self.rep == 0:
+            self.last_rep_label.config(text="Rep:- / ")
+        else:
+            self.last_rep_label.config(text=f"Rep:{self.rep} / ")
+        if self.new_rep == 0:
+            self.new_rep_label.config(text="-")
+        else:
+            self.new_rep_label.config(text=self.new_rep)
 
     def update_set_layout(self):
-        self.rep = self.training_df.loc[
-            (self.training_df['ExerciseNumber'] == self.exercise_number) &
-            (self.training_df['Set'] == self.set),
-            'Reps'].values[0]
         self.weight = self.training_df.loc[
             (self.training_df['ExerciseNumber'] == self.exercise_number) &
             (self.training_df['Set'] == self.set),
             'Weight'].values[0]
+        self.rep = self.training_df.loc[
+            (self.training_df['ExerciseNumber'] == self.exercise_number) &
+            (self.training_df['Set'] == self.set),
+            'Reps'].values[0]
+        self.new_rep = self.new_training_df.loc[
+            (self.new_training_df['ExerciseNumber'] == self.exercise_number) &
+            (self.new_training_df['Set'] == self.set),
+            'Reps'].values[0]   
 
         self.set_label.config(text=f"S: {self.set}")
         self.weight_label.config(text=f"W: {self.weight}")
-        self.last_rep_label.config(text=f"Rep:{self.rep} / ")
+        if self.rep == 0:
+            self.last_rep_label.config(text="Rep:- / ")
+        else:
+            self.last_rep_label.config(text=f"Rep:{self.rep} / ")
+        if self.new_rep == 0:
+            self.new_rep_label.config(text="-")
+        else:
+            self.new_rep_label.config(text=self.new_rep)
         
