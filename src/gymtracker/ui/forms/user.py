@@ -1,20 +1,22 @@
 import tkinter as tk
 from tkinter import font
-from lib.libhelper.db import *
-from lib.libclass.controller import Controller
-from lib.libclass.training_form import *
+from typing import Callable
 
+from ...devices.controller import Controller
+from ...services.training_service import TrainingService
 
 
 class UserForm:
-    def __init__(self):
-        self.selection_window = None
-        self.buttons = []   
+    def __init__(self, service: TrainingService, on_user_selected: Callable[[str], None]):
+        self._service = service
+        self._on_user_selected = on_user_selected
+        self.selection_window: tk.Tk | None = None
+        self.buttons: list[tk.Button] = []
         self.index = 0
-        self.selected_user = None 
+        self.selected_user: str | None = None
+        self.controller = Controller()
+        self.controller.register_listener(self.handle_controller_input_user)
         self.selection_user_layout()
-        self.cc = Controller()
-        self.cc.register_listener(self.handle_controller_input_user)
 
     def handle_controller_input_user(self, keycode):
         match keycode:
@@ -23,13 +25,13 @@ class UserForm:
             case "BTN_A":
                 self.on_enter()
 
-    def select_user(self, option):
-        from main import call_trainingForm
-        self.cc.stop()  # Stop the old controller thread
+    def select_user(self, option: str):
+        if self.selection_window is None:
+            return
+        self.controller.stop()
         self.selected_user = option
         self.selection_window.destroy()
-
-        call_trainingForm(self.selected_user)
+        self._on_user_selected(option)
 
 
     def highlight_button(self, button):
@@ -57,11 +59,10 @@ class UserForm:
     def selection_user_layout(self):
         # Create the selection window layout
 
-        names = get_names()
+        names = self._service.list_users()
 
         self.selection_window = tk.Tk()
         self.selection_window.geometry("960x320")
-
         self.selection_window.configure(bg='black')
 
         menu_font = font.Font(family="Digital-7 Mono", size=50)
@@ -69,7 +70,8 @@ class UserForm:
         label = tk.Label(self.selection_window, text="Who is gonna sweat today?", font=menu_font, bg="black", fg="white")
         label.pack(pady=20)
 
-        for i, name in enumerate(names):
+        for idx, name in enumerate(names):
+            x_position = 250 + (idx * 310)
             button = tk.Button(
                 self.selection_window,
                 bg='black',
@@ -78,12 +80,16 @@ class UserForm:
                 highlightthickness=0,
                 text=name,
                 font=menu_font,
-                command=lambda name=name: self.select_user(name)
+                command=lambda value=name: self.select_user(value),
             )
-            button.place(x=250 + (i * 310), y=150, width=250, height=80) 
+            button.place(x=x_position, y=150, width=250, height=80)
             self.buttons.append(button)
 
     def init_selection_user(self):
         # Start the window's main loop
-        self.selection_window.after(100, lambda: (self.buttons[0].focus_set(), self.highlight_button(self.buttons[0])))
+        if not self.selection_window or not self.buttons:
+            return
+        self.selection_window.after(
+            100, lambda: (self.buttons[0].focus_set(), self.highlight_button(self.buttons[0]))
+        )
         self.selection_window.mainloop()

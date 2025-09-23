@@ -2,15 +2,17 @@ import tkinter as tk
 from tkinter import font
 import time
 from datetime import datetime
-from lib.libhelper.db import *
-from lib.libclass.controller import *
-import numpy as np
+
+from ...devices.controller import Controller
+from ...services.training_service import TrainingService
+
 
 class TimerForm:
-    def __init__(self, user, training):
+    def __init__(self, user: str, training: str, service: TrainingService) -> None:
 
         self.user = user
         self.training = training
+        self._service = service
         # Initialize window, define geometry, and hide title bar
         self.window = tk.Tk()
         self.window.geometry("960x320")
@@ -192,9 +194,9 @@ class TimerForm:
         self.is_visible = True
         self.blink_label("white")
 
-    def set_df(self):
+    def set_df(self) -> None:
         self.weight_steps = [4, 7, 9, 11, 14, 16, 18, 20, 23, 25, 27, 30, 32, 34, 36, 39, 41]
-        self.training_df = get_last_training(self.user, self.training)
+        self.training_df = self._service.fetch_last_training(self.user, self.training)
         self.training_df['Reps'] = self.training_df['Reps'].astype('Int64')
         self.new_training_df = self.training_df.copy()
         self.new_training_df = self.new_training_df.assign(Reps=0)
