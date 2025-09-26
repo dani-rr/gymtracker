@@ -32,19 +32,25 @@ class TrainingRepository:
                 '''SELECT DISTINCT "TrainingOrder" FROM "TrainingLog" WHERE "Name" = %s AND "Date" = (SELECT MAX("Date") FROM "TrainingLog" WHERE "Name" = %s)''',
                 (user, user),
             )
-            last_training_order = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            last_training_order = row[0] if row else None
 
-            next_training_order = 1 if last_training_order == 3 else last_training_order + 1
+            next_training: str | None = None
+            if last_training_order is not None:
+                next_training_order = 1 if last_training_order == 3 else last_training_order + 1
+                cursor.execute(
+                    '''SELECT DISTINCT "Training" FROM "TrainingLog" WHERE "TrainingOrder" = %s AND "Name" = %s''',
+                    (next_training_order, user),
+                )
+                next_row = cursor.fetchone()
+                next_training = next_row[0] if next_row else None
+            elif trainings:
+                next_training = trainings[0]
 
-            cursor.execute(
-                '''SELECT DISTINCT "Training" FROM "TrainingLog" WHERE "TrainingOrder" = %s AND "Name" = %s''',
-                (next_training_order, user),
-            )
-            next_training = cursor.fetchone()[0]
-
-            for idx, training in enumerate(trainings):
-                if training == next_training:
-                    trainings_display[idx] = f"▸ {next_training}"
+            if next_training:
+                for idx, training in enumerate(trainings):
+                    if training == next_training:
+                        trainings_display[idx] = f"▸ {next_training}"
 
             return trainings, trainings_display
 
