@@ -22,7 +22,7 @@ class TrainingRepository:
     def get_trainings(self, user: str) -> tuple[list[str], list[str]]:
         with self._db.cursor_context() as cursor:
             cursor.execute(
-                '''SELECT DISTINCT "Training" FROM "TrainingLog" WHERE "Name" = %s ORDER BY "TrainingOrder"''',
+                '''SELECT "Training" FROM "TrainingLog" WHERE "Name" = %s GROUP BY "Training", "TrainingOrder" ORDER BY "TrainingOrder"''',
                 (user,),
             )
             trainings = [row[0] for row in cursor.fetchall()]

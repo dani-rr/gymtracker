@@ -11,6 +11,7 @@ class TrainingForm:
         self,
         user: str,
         service: TrainingService,
+        controller: Controller,
         on_training_selected: Callable[[str], None],
         on_back: Callable[[], None],
     ) -> None:
@@ -18,28 +19,36 @@ class TrainingForm:
         self._service = service
         self._on_training_selected = on_training_selected
         self._on_back = on_back
+        self.controller = controller
         self.training_window: tk.Tk | None = None
         self.buttons: list[tk.Button] = []
         self.index = 0
         self.selected_training: str | None = None
-        self.controller = Controller()
-        self.controller.register_listener(self.handle_controller_input_training)
         self.selection_training_layout()
+        self.controller.set_listener(self.handle_controller_input_training)
 
     def handle_controller_input_training(self, keycode):
+        if self.training_window is None:
+            return
+        self.training_window.after(0, lambda code=keycode: self._dispatch_controller_input_training(code))
+
+    def _dispatch_controller_input_training(self, keycode):
+        if self.training_window is None:
+            return
         match keycode:
             case "RIGHT" | "LEFT":
                 self.switch_button(keycode)
             case "BTN_A":
                 self.on_enter()
             case "BTN_B":
-                self.go_back()
+                self._handle_back()
         
-    def go_back(self):
+    def _handle_back(self) -> None:
         if self.training_window is None:
             return
-        self.controller.stop()
+        self.controller.set_listener(None)
         self.training_window.destroy()
+        self.training_window = None
         self._on_back()
 
 
@@ -47,8 +56,9 @@ class TrainingForm:
         if self.training_window is None:
             return
         self.selected_training = option
-        self.controller.stop()
+        self.controller.set_listener(None)
         self.training_window.destroy()
+        self.training_window = None
         self._on_training_selected(option)
 
     def highlight_button(self, button):
@@ -77,6 +87,7 @@ class TrainingForm:
         trainings, trainings_strings = self._service.list_trainings(self.user)
 
         self.training_window = tk.Tk()
+        self.training_window.protocol("WM_DELETE_WINDOW", self.on_close)
         self.training_window.geometry("960x320")
         self.training_window.configure(bg='black')
 
@@ -117,3 +128,6 @@ class TrainingForm:
             100, lambda: (self.buttons[0].focus_set(), self.highlight_button(self.buttons[0]))
         )
         self.training_window.mainloop()
+
+    def on_close(self) -> None:
+        self._handle_back()

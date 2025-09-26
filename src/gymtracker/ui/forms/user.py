@@ -7,18 +7,30 @@ from ...services.training_service import TrainingService
 
 
 class UserForm:
-    def __init__(self, service: TrainingService, on_user_selected: Callable[[str], None]):
+    def __init__(
+        self,
+        service: TrainingService,
+        controller: Controller,
+        on_user_selected: Callable[[str], None],
+    ):
         self._service = service
         self._on_user_selected = on_user_selected
+        self.controller = controller
         self.selection_window: tk.Tk | None = None
         self.buttons: list[tk.Button] = []
         self.index = 0
         self.selected_user: str | None = None
-        self.controller = Controller()
-        self.controller.register_listener(self.handle_controller_input_user)
         self.selection_user_layout()
+        self.controller.set_listener(self.handle_controller_input_user)
 
     def handle_controller_input_user(self, keycode):
+        if self.selection_window is None:
+            return
+        self.selection_window.after(0, lambda code=keycode: self._dispatch_controller_input_user(code))
+
+    def _dispatch_controller_input_user(self, keycode):
+        if self.selection_window is None:
+            return
         match keycode:
             case "RIGHT" | "LEFT":
                 self.switch_button(keycode)
@@ -28,9 +40,10 @@ class UserForm:
     def select_user(self, option: str):
         if self.selection_window is None:
             return
-        self.controller.stop()
+        self.controller.set_listener(None)
         self.selected_user = option
         self.selection_window.destroy()
+        self.selection_window = None
         self._on_user_selected(option)
 
 
@@ -62,6 +75,7 @@ class UserForm:
         names = self._service.list_users()
 
         self.selection_window = tk.Tk()
+        self.selection_window.protocol("WM_DELETE_WINDOW", self.on_close)
         self.selection_window.geometry("960x320")
         self.selection_window.configure(bg='black')
 
@@ -93,3 +107,9 @@ class UserForm:
             100, lambda: (self.buttons[0].focus_set(), self.highlight_button(self.buttons[0]))
         )
         self.selection_window.mainloop()
+
+    def on_close(self) -> None:
+        self.controller.set_listener(None)
+        if self.selection_window is not None:
+            self.selection_window.destroy()
+            self.selection_window = None

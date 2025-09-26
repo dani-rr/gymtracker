@@ -8,11 +8,18 @@ from ...services.training_service import TrainingService
 
 
 class TimerForm:
-    def __init__(self, user: str, training: str, service: TrainingService) -> None:
+    def __init__(
+        self,
+        user: str,
+        training: str,
+        service: TrainingService,
+        controller: Controller,
+    ) -> None:
 
         self.user = user
         self.training = training
         self._service = service
+        self.controller = controller
         # Initialize window, define geometry, and hide title bar
         self.window = tk.Tk()
         self.window.geometry("960x320")
@@ -33,9 +40,9 @@ class TimerForm:
         self.update_current_time()
         self.training_time(0)
 
-        # Initialize Controller
-        self.controller = Controller()
-        self.controller.register_listener(self.handle_controller_input)
+        # Register controller listener and ensure we clean it up when closing
+        self.controller.set_listener(self.handle_controller_input)
+        self.window.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.window.mainloop()
 
@@ -285,6 +292,13 @@ class TimerForm:
         self.blink_id = self.window.after(1000, lambda: self.blink_label(color))
 
     def handle_controller_input(self, keycode):
+        if self.window is None:
+            return
+        self.window.after(0, lambda code=keycode: self._dispatch_controller_input(code))
+
+    def _dispatch_controller_input(self, keycode):
+        if self.window is None:
+            return
         match keycode:
             case "BTN_B":
                 if self.insert_rep == False:
@@ -358,6 +372,12 @@ class TimerForm:
         elif keycode == "DOWN":
             self.new_rep -= 1
         self.new_rep_label.config(text=self.new_rep)
+
+    def on_close(self) -> None:
+        self.controller.set_listener(None)
+        if self.window is not None:
+            self.window.destroy()
+            self.window = None
 
     def update_exercise_layout(self):
         self.exercise = self.training_df.loc[self.training_df['ExerciseNumber'] == self.exercise_number, 'Exercise'].values[0]
