@@ -7,76 +7,104 @@ from pandas import DataFrame
 
 from .connection import Database, default_db
 
+DEFAULT_TRAINING_SEQUENCE = ("Push", "Pull", "Legs")
+DEFAULT_SEQUENCE_INDEX = {name: idx for idx, name in enumerate(DEFAULT_TRAINING_SEQUENCE)}
+
+
+def _training_sort_key(name: str) -> tuple[int, str]:
+    sequence_position = DEFAULT_SEQUENCE_INDEX.get(name, len(DEFAULT_SEQUENCE_INDEX))
+    return sequence_position, name.lower()
+
+
+def _sort_trainings(names: list[str]) -> tuple[list[str], dict[str, int]]:
+    sorted_names = sorted(names, key=_training_sort_key)
+    order_map = {name: idx + 1 for idx, name in enumerate(sorted_names)}
+    return sorted_names, order_map
+
 
 class TrainingRepository:
-    """Encapsulates all queries against the TrainingLog table."""
+    """Encapsulates all queries against the training table."""
 
     def __init__(self, db: Database | None = None) -> None:
         self._db = db or default_db
 
     def get_user_names(self) -> list[str]:
         with self._db.cursor_context() as cursor:
-            cursor.execute('''SELECT DISTINCT "Name" FROM "TrainingLog" ORDER BY "Name"''')
+            cursor.execute("SELECT DISTINCT user FROM training ORDER BY user")
             return [name[0] for name in cursor.fetchall()]
 
     def get_trainings(self, user: str) -> tuple[list[str], list[str]]:
         with self._db.cursor_context() as cursor:
-            cursor.execute(
-                '''SELECT "Training" FROM "TrainingLog" WHERE "Name" = %s GROUP BY "Training", "TrainingOrder" ORDER BY "TrainingOrder"''',
-                (user,),
-            )
-            trainings = [row[0] for row in cursor.fetchall()]
+            cursor.execute("SELECT DISTINCT training FROM training WHERE user = ?", (user,))
+            raw_trainings = [row[0] for row in cursor.fetchall()]
+            trainings, _ = _sort_trainings(raw_trainings)
             trainings_display = trainings.copy()
 
-            cursor.execute(
-                '''SELECT DISTINCT "TrainingOrder" FROM "TrainingLog" WHERE "Name" = %s AND "Date" = (SELECT MAX("Date") FROM "TrainingLog" WHERE "Name" = %s)''',
-                (user, user),
-            )
-            row = cursor.fetchone()
-            last_training_order = row[0] if row else None
-
-            next_training: str | None = None
-            if last_training_order is not None:
-                next_training_order = 1 if last_training_order == 3 else last_training_order + 1
+            if trainings:
                 cursor.execute(
-                    '''SELECT DISTINCT "Training" FROM "TrainingLog" WHERE "TrainingOrder" = %s AND "Name" = %s''',
-                    (next_training_order, user),
+                    """
+                    SELECT training, MAX(date) AS last_date
+                    FROM training
+                    WHERE user = ?
+                    GROUP BY training
+                    """,
+                    (user,),
                 )
-                next_row = cursor.fetchone()
-                next_training = next_row[0] if next_row else None
-            elif trainings:
-                next_training = trainings[0]
-
-            if next_training:
-                for idx, training in enumerate(trainings):
-                    if training == next_training:
-                        trainings_display[idx] = f"▸ {next_training}"
+                last_seen = {training: last_date for training, last_date in cursor.fetchall()}
+                next_training = min(
+                    trainings,
+                    key=lambda name: (last_seen.get(name) or "", _training_sort_key(name)),
+                )
+                highlight_index = trainings.index(next_training)
+                trainings_display[highlight_index] = f"▸ {next_training}"
 
             return trainings, trainings_display
 
     def get_next_training_order(self, user: str) -> Sequence[tuple[int]]:
         with self._db.cursor_context() as cursor:
+            cursor.execute("SELECT DISTINCT training FROM training WHERE user = ?", (user,))
+            raw_trainings = [row[0] for row in cursor.fetchall()]
+            trainings, order_map = _sort_trainings(raw_trainings)
+            if not trainings:
+                return []
+
             cursor.execute(
-                '''SELECT DISTINCT "TrainingOrder" FROM "TrainingLog" WHERE "Name" = %s AND "Date" = (SELECT MAX("Date") FROM "TrainingLog" WHERE "Name" = %s);''',
+                """
+                SELECT DISTINCT training
+                FROM training
+                WHERE user = ?
+                  AND date = (
+                      SELECT MAX(date)
+                      FROM training
+                      WHERE user = ?
+                  )
+                """,
                 (user, user),
             )
-            return cursor.fetchall()
+            last_trainings = [row[0] for row in cursor.fetchall()]
+            return [(order_map.get(training, 0),) for training in last_trainings if training in order_map]
 
     def get_last_training(self, user: str, training: str) -> DataFrame:
         with self._db.cursor_context() as cursor:
             cursor.execute(
-                '''SELECT * FROM "TrainingLog" WHERE "Name" = %s AND "Training" = %s AND "Date" = (SELECT MAX("Date") FROM "TrainingLog" WHERE "Name" = %s AND "Training" = %s);''',
+                """
+                SELECT *
+                FROM training
+                WHERE user = ?
+                  AND training = ?
+                  AND date = (
+                      SELECT MAX(date)
+                      FROM training
+                      WHERE user = ?
+                        AND training = ?
+                  )
+                """,
                 (user, training, user, training),
             )
             records = cursor.fetchall()
-            cursor.execute(
-                """SELECT column_name FROM information_schema.columns WHERE table_name = 'TrainingLog' ORDER BY ordinal_position"""
-            )
-            columns = [row[0] for row in cursor.fetchall()]
+            columns = [col[0] for col in cursor.description] if cursor.description else []
 
-        training_df = DataFrame(records)
-        training_df.columns = columns
-        return training_df
+        return DataFrame(records, columns=columns)
 
 
 def get_repository(db: Database | None = None) -> TrainingRepository:
